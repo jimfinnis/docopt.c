@@ -13,10 +13,15 @@ outputs the equivalent C code to parse a CLI, to either the stdout or a file.
 
 Options:
   -o, --output-name=<outname>
-                Filename used to write the produced C file.
-                If not present, the produced code is printed to stdout.
-  -t, --template=<template>
-                Filename used to read a C template.
+                Filename used to write the produced C and H files.
+                If not present, the produced code is output to docoptout.h
+                and docoptout.c.
+  -t, --templatec=<template>
+                Filename used to read a C source template.
+  --cpp
+                True if the source is to be suffixed .cpp
+  -T, --templateh=<template>
+                Filename used to read a C header template.
   -h,--help     Show this help message and exit.
 
 Arguments:
@@ -134,11 +139,18 @@ if __name__ == '__main__':
             sys.exit("")
         else:
             args['<docopt>'] = sys.stdin.read()
-        if args['--template'] is None:
-            args['--template'] = os.path.join(
+        if args['--output-name'] is None:
+            args['--output-name']='docoptout'
+        if args['--templatec'] is None:
+            args['--templatec'] = os.path.join(
                     os.path.dirname(os.path.realpath(__file__)), "template.c")
-        with open(args['--template'], 'r') as f:
-                args['--template'] = f.read()
+        with open(args['--templatec'], 'r') as f:
+                args['--templatec'] = f.read()
+        if args['--templateh'] is None:
+            args['--templateh'] = os.path.join(
+                    os.path.dirname(os.path.realpath(__file__)), "template.h")
+        with open(args['--templateh'], 'r') as f:
+                args['--templateh'] = f.read()
     except IOError as e:
         sys.exit(e)
 
@@ -189,7 +201,7 @@ if __name__ == '__main__':
     t_if_flag = ''.join(c_if_flag(flag) for flag in flags)
     t_if_option = ''.join(c_if_option(opt) for opt in options)
 
-    out = Template(args['--template']).safe_substitute(
+    outc = Template(args['--templatec']).safe_substitute(
             commands=t_commands,
             arguments=t_arguments,
             flags=t_flags,
@@ -206,11 +218,31 @@ if __name__ == '__main__':
             elems_opts=t_elems_opts,
             elems_n=t_elems_n)
 
-    if args['--output-name'] is None:
-        print(out.strip() + '\n')
-    else:
-        try:
-            with open(args['--output-name'], 'w') as f:
-                f.write(out.strip() + '\n')
-        except IOError as e:
-            sys.exit(str(e))
+    outh = Template(args['--templateh']).safe_substitute(
+            commands=t_commands,
+            arguments=t_arguments,
+            flags=t_flags,
+            options=t_options,
+            help_message=to_c(doc),
+            usage_pattern=to_c(usage),
+            if_flag=t_if_flag,
+            if_option=t_if_option,
+            if_command=t_if_command,
+            if_argument=t_if_argument,
+            defaults=t_defaults,
+            elems_cmds=t_elems_cmds,
+            elems_args=t_elems_args,
+            elems_opts=t_elems_opts,
+            elems_n=t_elems_n)
+
+    try:
+        if args['--cpp']:
+            suffix='.cpp';
+        else:
+            suffix='.c';
+        with open(args['--output-name']+suffix, 'w') as f:
+            f.write(outc.strip() + '\n')
+        with open(args['--output-name']+".h", 'w') as f:
+            f.write(outh.strip() + '\n')
+    except IOError as e:
+        sys.exit(str(e))
